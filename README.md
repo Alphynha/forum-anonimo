@@ -38,10 +38,11 @@ O servidor será iniciado na porta 3000.
 
 ## Endpoints disponíveis
 
-| Método | Rota             | Descrição                    |
-|--------|------------------|------------------------------|
-| GET    | /api/artigos     | Lista todos os artigos       |
-| GET    | /health          | Status do servidor           |
+| Método | Rota          | Descrição              |
+|--------|---------------|------------------------|
+| GET    | /api/artigos  | Lista todos os artigos |
+| POST   | /api/artigos  | Publica um novo artigo |
+| GET    | /health       | Status do servidor     |
 
 ## Exemplos de uso
 
@@ -51,3 +52,24 @@ O servidor será iniciado na porta 3000.
 curl http://localhost:3000/api/artigos
 ```
 
+### Publicar um artigo
+
+```bash
+curl -X POST http://localhost:3000/api/artigos \
+  -H "Content-Type: application/json" \
+  -d '{"titulo": "Meu primeiro artigo", "conteudo": "Este é o conteúdo do meu primeiro artigo."}'
+```
+
+### Resposta esperada (POST - Status 201)
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "titulo": "Meu primeiro artigo",
+    "conteudo": "Este é o conteúdo do meu primeiro artigo.",
+    "criado_em": "2022-01-01T00:00:00.000Z"
+  }
+}
+```

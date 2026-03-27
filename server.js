@@ -5,7 +5,6 @@ const artigosRouter = require('./src/routes/artigos');
 const { timeStamp } = require('console');
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
