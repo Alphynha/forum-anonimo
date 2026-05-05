@@ -2,9 +2,20 @@
   "name": "forum-anonimo",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/ server.js"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageThreshold": {
+      "global": {
+        "lines": 90
+      }
+    }
   },
   "keywords": [],
   "author": "",
@@ -13,5 +24,12 @@
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.3.0",
+    "globals": "^17.6.0",
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2"
   }
 }

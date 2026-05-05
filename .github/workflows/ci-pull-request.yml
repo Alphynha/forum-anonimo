@@ -6,9 +6,10 @@ on:
       - main
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
 
+  lint:
+    name: Verificação de estilo (ESLint)
+    runs-on: ubuntu-latest
     steps:
       - name: Clonar repositório
         uses: actions/checkout@v4
@@ -21,8 +22,23 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      - name: Verificar integridade do servidor
-        run: |
-          node server.js &
-          sleep 3
-          curl --fail http://localhost:3000/health
+      - name: Executar ESLint
+        run: npm run lint
+
+  test:
+    name: Testes e cobertura (Jest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar testes com cobertura
+        run: npm test
