@@ -90,3 +90,64 @@ docker run -p 3000:3000 alphynha/forum-anonimo
 # Rodar com volume para persistir o banco de dados
 docker run -p 3000:3000 -v $(pwd)/data:/app/data alphynha/forum-anonimo
 ```
+
+## Infraestrutura Vagrant
+
+### Pré-requisitos
+
+- [Vagrant](https://www.vagrantup.com/downloads) 2.4+
+- [VirtualBox](https://www.virtualbox.org/wiki/Downloads) 7.0+
+
+### Máquinas Virtuais
+
+| VM | IP | RAM | Descrição |
+|----|----|-----|-----------|
+| vm1 | 192.168.56.10 | 1024MB | Máquina para testes |
+| vm2 | 192.168.56.11 | 512MB | Máquina com a aplicação |
+
+### Executando a infraestrutura
+
+```bash
+# Subir as VMs (primeira execução pode demorar)
+vagrant up --provider=virtualbox
+
+# Verificar status das VMs
+vagrant status
+```
+
+### Iniciando a aplicação na VM2
+
+```bash
+# Acessar a VM2
+vagrant ssh vm2
+
+# Dentro da VM2 — iniciar o servidor
+cd /vagrant_data
+node server.js &
+```
+
+### Testando a rota GET a partir da VM1
+
+```bash
+# Em outro terminal — acessar a VM1
+vagrant ssh vm1
+
+# Dentro da VM1 — fazer requisição para a VM2
+curl http://192.168.56.11:3000/api/artigos
+
+# Ou testar o health check
+curl http://192.168.56.11:3000/health
+```
+
+### Parando as VMs
+
+```bash
+# Suspender (salva o estado)
+vagrant suspend
+
+# Desligar
+vagrant halt
+
+# Destruir (remove completamente)
+vagrant destroy
+```
