@@ -1,6 +1,9 @@
 # Fórum Anônimo - API REST
 Plataforma anônima de postagem de artigos construída com Node.js, Express e SQLite.
 
+[![Docker Hub](https://img.shields.io/docker/pulls/alphynha/forum-anonimo?style=flat-square&logo=docker&label=DockerHub)](https://hub.docker.com/r/alphynha/forum-anonimo)
+[![Docker Image Size](https://img.shields.io/docker/image-size/alphynha/forum-anonimo/latest?style=flat-square&logo=docker)](https://hub.docker.com/r/alphynha/forum-anonimo)
+
 ## Workflow de desenvolvimento
 Este projeto utiliza o **GitHub Flow**.
 
@@ -72,4 +75,18 @@ curl -X POST http://localhost:3000/api/artigos \
     "criado_em": "2022-01-01T00:00:00.000Z"
   }
 }
+```
+
+## Docker
+
+A imagem está disponível no DockerHub: https://hub.docker.com/r/alphynha/forum-anonimo
+
+### Executar via Docker
+
+```bash
+# Baixar e rodar a imagem
+docker run -p 3000:3000 alphynha/forum-anonimo
+
+# Rodar com volume para persistir o banco de dados
+docker run -p 3000:3000 -v $(pwd)/data:/app/data alphynha/forum-anonimo
 ```
