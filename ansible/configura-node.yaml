@@ -1,0 +1,96 @@
+---
+# ─────────────────────────────────────────────────────────────────────────────
+# Playbook: configura-node.yaml
+# Descrição: Clona o repositório do fórum anônimo, instala as dependências
+#            e inicia o servidor
+# Alvo: servidores no grupo [webservers] (VM2)
+# ─────────────────────────────────────────────────────────────────────────────
+- name: Configurar aplicação Node.js na VM2
+  hosts: webservers
+  become: true
+
+  vars:
+    app_dir: /home/vagrant/forum-anonimo
+    repo_url: https://github.com/Alphynha/forum-anonimo.git
+
+  tasks:
+
+    # ── Verificar Node.js ──────────────────────────────────────────────────
+    # Node.js já foi instalado pelo Vagrantfile — apenas confirmamos
+    - name: Verificar versão do Node.js
+      command: node --version
+      register: node_version
+      changed_when: false
+
+    - name: Exibir versão do Node.js
+      debug:
+        msg: "Node.js instalado: {{ node_version.stdout }}"
+
+    # ── Instalar Git ───────────────────────────────────────────────────────
+    - name: Instalar Git
+      apt:
+        name: git
+        state: present
+        update_cache: yes
+
+    # ── Clonar repositório ─────────────────────────────────────────────────
+    # force: yes garante que alterações locais são descartadas
+    # version: main clona sempre a branch principal estável
+    - name: Clonar repositório do fórum anônimo
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: main
+        force: yes
+      become: false
+
+    # ── Instalar dependências ──────────────────────────────────────────────
+    - name: Instalar dependências Node.js
+      npm:
+        path: "{{ app_dir }}"
+        production: true
+      become: false
+
+    # ── Criar pasta data ───────────────────────────────────────────────────
+    - name: Criar pasta data para o banco SQLite
+      file:
+        path: "{{ app_dir }}/data"
+        state: directory
+        owner: vagrant
+        group: vagrant
+        mode: '0755'
+
+    # ── Iniciar servidor ───────────────────────────────────────────────────
+    # ignore_errors: true — não falha se não houver processo para matar
+    - name: Parar servidor existente
+      shell: pkill -f 'node server.js' || true
+      become: false
+      ignore_errors: true
+
+    - name: Aguardar encerramento do servidor anterior
+      pause:
+        seconds: 2
+
+    # async e poll: 0 — inicia em background sem aguardar conclusão
+    - name: Iniciar servidor Node.js
+      shell: "nohup node {{ app_dir }}/server.js > /tmp/server.log 2>&1 &"
+      become: false
+      async: 10
+      poll: 0
+
+    # ── Verificar servidor ─────────────────────────────────────────────────
+    - name: Aguardar servidor inicializar
+      wait_for:
+        host: 192.168.56.11
+        port: 3000
+        timeout: 15
+
+    - name: Verificar health check
+      uri:
+        url: http://192.168.56.11:3000/health
+        return_content: yes
+      register: health_check
+
+    - name: Exibir resultado do health check
+      debug:
+        msg: "Servidor respondendo: {{ health_check.content }}"
