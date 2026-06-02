@@ -46,9 +46,9 @@
 
     # ── Instalar dependências ──────────────────────────────────────────────
     - name: Instalar dependências Node.js
-      npm:
-        path: "{{ app_dir }}"
-        production: true
+      shell: npm install --omit=dev
+      args:
+        chdir: "{{ app_dir }}"
       become: false
 
     # ── Criar pasta data ───────────────────────────────────────────────────

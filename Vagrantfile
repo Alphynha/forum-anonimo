@@ -21,7 +21,9 @@ Vagrant.configure("2") do |config|
     # Sincroniza a pasta ansible/ com /ansible dentro da VM1
     vm1.vm.synced_folder "./ansible", "/ansible"
 
-    # Provisionamento — instala o Ansible na VM1
+    # Sincroniza a raiz do projeto para troca de chaves SSH com a VM2
+    vm1.vm.synced_folder ".", "/vagrant_data"
+
     vm1.vm.provision "shell", inline: <<-SHELL
       apt-get update -y
       apt-get install -y software-properties-common
@@ -30,6 +32,19 @@ Vagrant.configure("2") do |config|
 
       echo "Ansible instalado:"
       ansible --version
+
+      # Gera par de chaves SSH para o usuário vagrant
+      # A chave pública é compartilhada via pasta sincronizada para que a VM2
+      # possa adicioná-la ao seu authorized_keys antes de o playbook rodar
+      if [ ! -f /home/vagrant/.ssh/id_rsa ]; then
+        sudo -u vagrant ssh-keygen -t rsa -b 2048 \
+          -f /home/vagrant/.ssh/id_rsa -N "" -q
+        echo "Par de chaves SSH gerado."
+      fi
+
+      mkdir -p /vagrant_data/.ssh_exchange
+      cp /home/vagrant/.ssh/id_rsa.pub /vagrant_data/.ssh_exchange/vm1.pub
+      echo "Chave pública copiada para .ssh_exchange/vm1.pub"
     SHELL
 
   end
@@ -59,8 +74,19 @@ Vagrant.configure("2") do |config|
       echo "Node.js: $(node --version)"
       echo "npm: $(npm --version)"
 
-      cd /vagrant_data
-      npm install --omit=dev
+      # Adiciona a chave pública da VM1 ao authorized_keys do vagrant
+      # Vagrant provisiona as VMs em ordem: VM1 primeiro, depois VM2
+      # Por isso a chave já estará disponível em .ssh_exchange/vm1.pub
+      if [ -f /vagrant_data/.ssh_exchange/vm1.pub ]; then
+        mkdir -p /home/vagrant/.ssh
+        cat /vagrant_data/.ssh_exchange/vm1.pub >> /home/vagrant/.ssh/authorized_keys
+        chmod 700 /home/vagrant/.ssh
+        chmod 600 /home/vagrant/.ssh/authorized_keys
+        chown -R vagrant:vagrant /home/vagrant/.ssh
+        echo "Chave pública da VM1 adicionada ao authorized_keys."
+      else
+        echo "AVISO: chave da VM1 não encontrada em .ssh_exchange/vm1.pub"
+      fi
 
       echo "Provisionamento concluído!"
     SHELL
