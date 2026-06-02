@@ -151,3 +151,46 @@ vagrant halt
 # Destruir (remove completamente)
 vagrant destroy
 ```
+
+## Ansible
+
+O Ansible é executado a partir da **VM1** (nó de controle) e configura a **VM2** (nó gerenciado).
+
+### Como funciona a autenticação SSH
+
+Durante o `vagrant up`, o Vagrantfile:
+1. Gera um par de chaves RSA na VM1 (`~/.ssh/id_rsa`)
+2. Copia a chave pública para `.ssh_exchange/vm1.pub` (pasta compartilhada)
+3. VM2 lê essa chave e a adiciona ao seu `authorized_keys`
+
+Isso permite que o Ansible na VM1 conecte via SSH na VM2 sem senha.
+
+### Executando o playbook
+
+```bash
+# 1. Subir as VMs (se ainda não estiverem rodando)
+vagrant up
+
+# 2. Entrar na VM1 (nó de controle)
+vagrant ssh vm1
+
+# 3. Dentro da VM1 — executar o playbook
+cd /ansible
+ansible-playbook configura-node.yaml
+
+# 4. Verificar se o servidor está respondendo
+curl http://192.168.56.11:3000/health
+```
+
+### O que o playbook faz
+
+| Etapa | Ação |
+|-------|------|
+| 1 | Verifica a versão do Node.js na VM2 |
+| 2 | Instala o Git |
+| 3 | Clona o repositório em `/home/vagrant/forum-anonimo` |
+| 4 | Instala as dependências de produção (`npm install --omit=dev`) |
+| 5 | Cria a pasta `data/` para o banco SQLite |
+| 6 | Inicia o servidor Node.js em background |
+| 7 | Verifica se o servidor respondeu na porta 3000 |
+| 8 | Confirma o health check via HTTP |
