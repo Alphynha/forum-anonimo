@@ -1,0 +1,110 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+#
+# Infraestrutura do projeto:
+#   VM1 — nó de controle Ansible (deploy da aplicação, playbooks em ../ansible)
+#   VM2 — nó gerenciado: aplicação Node.js + monitoramento (Netdata)
+# A pasta vagrant/ é sincronizada em /vagrant dentro das VMs.
+
+Vagrant.configure("2") do |config|
+
+  # VM1 — Nó de controle Ansible
+  config.vm.define "vm1" do |vm1|
+
+    vm1.vm.box      = "ubuntu/jammy64"
+    vm1.vm.hostname = "vm1"
+    vm1.vm.network "private_network", ip: "192.168.56.10"
+
+    vm1.vm.provider "virtualbox" do |vb|
+      vb.name   = "forum-anonimo-vm1"
+      vb.memory = 1024
+      vb.cpus   = 1
+    end
+
+    vm1.vm.synced_folder "../ansible", "/ansible"
+
+    vm1.vm.provision "shell", inline: <<-SHELL
+      apt-get update -y
+      apt-get install -y software-properties-common
+      add-apt-repository --yes --update ppa:ansible/ansible
+      apt-get install -y ansible
+
+      echo "Ansible instalado:"
+      ansible --version
+
+      # Gera a chave SSH da VM1 e a publica em /vagrant para a VM2 autorizá-la
+      if [ ! -f /home/vagrant/.ssh/id_rsa ]; then
+        sudo -u vagrant ssh-keygen -t rsa -b 2048 \
+          -f /home/vagrant/.ssh/id_rsa -N "" -q
+        echo "Par de chaves SSH gerado."
+      fi
+
+      mkdir -p /vagrant/.ssh_exchange
+      cp /home/vagrant/.ssh/id_rsa.pub /vagrant/.ssh_exchange/vm1.pub
+      echo "Chave pública copiada para .ssh_exchange/vm1.pub"
+    SHELL
+
+  end
+
+  # VM2 — Nó gerenciado (aplicação + monitoramento)
+  config.vm.define "vm2" do |vm2|
+
+    vm2.vm.box      = "ubuntu/jammy64"
+    vm2.vm.hostname = "vm2"
+    vm2.vm.network "private_network", ip: "192.168.56.11"
+
+    # Dashboard do Netdata acessível via localhost:19999
+    vm2.vm.network "forwarded_port", guest: 19999, host: 19999, auto_correct: true
+
+    vm2.vm.provider "virtualbox" do |vb|
+      vb.name   = "forum-anonimo-vm2"
+      vb.memory = 1024
+      vb.cpus   = 1
+    end
+
+    vm2.vm.provision "shell", inline: <<-SHELL
+      apt-get update -y
+      apt-get install -y curl gnupg
+      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+      apt-get install -y nodejs
+
+      echo "Node.js: $(node --version)"
+      echo "npm: $(npm --version)"
+
+      # Autoriza a chave da VM1 (VM1 é provisionada antes, já deixou o .pub aqui)
+      if [ -f /vagrant/.ssh_exchange/vm1.pub ]; then
+        mkdir -p /home/vagrant/.ssh
+        cat /vagrant/.ssh_exchange/vm1.pub >> /home/vagrant/.ssh/authorized_keys
+        chmod 700 /home/vagrant/.ssh
+        chmod 600 /home/vagrant/.ssh/authorized_keys
+        chown -R vagrant:vagrant /home/vagrant/.ssh
+        echo "Chave pública da VM1 adicionada ao authorized_keys."
+      else
+        echo "AVISO: chave da VM1 não encontrada em .ssh_exchange/vm1.pub"
+      fi
+
+      echo "Provisionamento base concluído!"
+    SHELL
+
+    # Roda o playbook de monitoramento localmente na própria VM2 (conexão local),
+    # sem depender da ordem de provisionamento entre as VMs.
+    vm2.vm.provision "shell", inline: <<-SHELL
+      apt-get update -y
+      apt-get install -y ansible
+
+      cat > /tmp/inventory-monitoramento.ini <<'EOF'
+[webservers]
+localhost ansible_connection=local
+EOF
+
+      echo "Executando playbook de monitoramento (Netdata)..."
+      ansible-playbook \
+        -i /tmp/inventory-monitoramento.ini \
+        /vagrant/data/configurar-monitoramento.yml
+
+      echo "Monitoramento configurado! Dashboard: http://192.168.56.11:19999"
+    SHELL
+
+  end
+
+end

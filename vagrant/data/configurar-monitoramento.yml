@@ -1,0 +1,118 @@
+---
+# Instala o Netdata na VM2, cria um alerta de CPU (>80% warn / >90% crit) com
+# notificação via Telegram, e instala o stress-ng para testar o alerta.
+- name: Configurar monitoramento com Netdata na VM2
+  hosts: webservers
+  become: true
+
+  vars:
+    # Placeholders. As credenciais reais ficam em secrets.yml (fora do git) e
+    # sobrescrevem estes valores via pre_tasks. Veja secrets.yml.example.
+    telegram_bot_token: "SEU_BOT_TOKEN_AQUI"
+    telegram_chat_id: "SEU_CHAT_ID_AQUI"
+
+    cpu_warn_threshold: 80
+    cpu_crit_threshold: 90
+
+    netdata_config_dir: /etc/netdata
+
+  # Se existir secrets.yml ao lado do playbook, carrega as credenciais reais.
+  pre_tasks:
+    - name: Verificar se há arquivo de segredos (secrets.yml)
+      stat:
+        path: "{{ playbook_dir }}/secrets.yml"
+      register: secrets_file
+
+    - name: Carregar credenciais do Telegram a partir de secrets.yml
+      include_vars: "{{ playbook_dir }}/secrets.yml"
+      when: secrets_file.stat.exists
+
+  tasks:
+    - name: Instalar Netdata e stress-ng
+      apt:
+        name:
+          - netdata
+          - stress-ng
+        state: present
+        update_cache: yes
+
+    # bind em 0.0.0.0 para acessar o dashboard pelo IP da VM2 (padrão é localhost)
+    - name: Configurar Netdata para escutar em todas as interfaces
+      ini_file:
+        path: "{{ netdata_config_dir }}/netdata.conf"
+        section: web
+        option: "bind to"
+        value: "0.0.0.0"
+        create: yes
+        mode: "0644"
+      notify: Reiniciar Netdata
+
+    - name: Criar regra de alerta de CPU (80%)
+      copy:
+        dest: "{{ netdata_config_dir }}/health.d/cpu_usage.conf"
+        mode: "0644"
+        content: |
+          # Alarme customizado de uso de CPU - gerado pelo Ansible
+          template: cpu_usage_alto
+          on: system.cpu
+          class: Utilization
+          type: System
+          component: CPU
+          lookup: average -1m unaligned of user,system,softirq,irq,guest,nice
+          units: %
+          every: 10s
+          warn: $this > {{ cpu_warn_threshold }}
+          crit: $this > {{ cpu_crit_threshold }}
+          delay: down 5m multiplier 1.5 max 1h
+          info: Uso medio de CPU no ultimo 1 minuto
+          to: sysadmin
+      notify: Reiniciar Netdata
+
+    # Copia o modelo de fábrica e ajusta só as opções do Telegram
+    - name: Copiar modelo de configuração de notificações para /etc/netdata
+      copy:
+        src: /usr/lib/netdata/conf.d/health_alarm_notify.conf
+        dest: "{{ netdata_config_dir }}/health_alarm_notify.conf"
+        remote_src: yes
+        force: no
+        mode: "0644"
+
+    - name: Habilitar envio de notificações via Telegram
+      lineinfile:
+        path: "{{ netdata_config_dir }}/health_alarm_notify.conf"
+        regexp: '^\s*SEND_TELEGRAM='
+        line: 'SEND_TELEGRAM="YES"'
+      notify: Reiniciar Netdata
+
+    - name: Definir o token do bot do Telegram
+      lineinfile:
+        path: "{{ netdata_config_dir }}/health_alarm_notify.conf"
+        regexp: '^\s*TELEGRAM_BOT_TOKEN='
+        line: 'TELEGRAM_BOT_TOKEN="{{ telegram_bot_token }}"'
+      notify: Reiniciar Netdata
+
+    - name: Definir o destinatário padrão do Telegram (chat_id)
+      lineinfile:
+        path: "{{ netdata_config_dir }}/health_alarm_notify.conf"
+        regexp: '^\s*DEFAULT_RECIPIENT_TELEGRAM='
+        line: 'DEFAULT_RECIPIENT_TELEGRAM="{{ telegram_chat_id }}"'
+      notify: Reiniciar Netdata
+
+    - name: Habilitar e iniciar o serviço Netdata
+      service:
+        name: netdata
+        state: started
+        enabled: yes
+
+    - name: Exibir instruções de acesso
+      debug:
+        msg:
+          - "Netdata instalado! Dashboard: http://{{ ansible_host | default('192.168.56.11') }}:19999"
+          - "Teste o alerta com: stress-ng --cpu 0 --cpu-load 95 --timeout 180s"
+
+  # Um único restart ao final agrupa todas as mudanças de configuração.
+  handlers:
+    - name: Reiniciar Netdata
+      service:
+        name: netdata
+        state: restarted
