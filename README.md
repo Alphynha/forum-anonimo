@@ -41,11 +41,12 @@ O servidor será iniciado na porta 3000.
 
 ## Endpoints disponíveis
 
-| Método | Rota          | Descrição              |
-|--------|---------------|------------------------|
-| GET    | /api/artigos  | Lista todos os artigos |
-| POST   | /api/artigos  | Publica um novo artigo |
-| GET    | /health       | Status do servidor     |
+| Método | Rota              | Descrição                    |
+|--------|-------------------|------------------------------|
+| GET    | /api/artigos      | Lista todos os artigos       |
+| POST   | /api/artigos      | Publica um novo artigo       |
+| DELETE | /api/artigos/:id  | Remove um artigo pelo id     |
+| GET    | /health           | Status do servidor           |
 
 ## Exemplos de uso
 
@@ -77,6 +78,14 @@ curl -X POST http://localhost:3000/api/artigos \
 }
 ```
 
+### Remover um artigo
+
+```bash
+curl -X DELETE http://localhost:3000/api/artigos/1
+```
+
+Retorna `204 No Content` em caso de sucesso, ou `404` se o artigo não existir.
+
 ## Docker
 
 A imagem está disponível no DockerHub: https://hub.docker.com/r/alphynha/forum-anonimo
@@ -93,6 +102,9 @@ docker run -p 3000:3000 -v $(pwd)/data:/app/data alphynha/forum-anonimo
 
 ## Infraestrutura Vagrant
 
+Toda a infraestrutura (VMs, provisionamento e monitoramento) fica no diretório
+[`vagrant/`](vagrant/). Os comandos abaixo devem ser executados **a partir de `vagrant/`**.
+
 ### Pré-requisitos
 
 - [Vagrant](https://www.vagrantup.com/downloads) 2.4+
@@ -100,14 +112,17 @@ docker run -p 3000:3000 -v $(pwd)/data:/app/data alphynha/forum-anonimo
 
 ### Máquinas Virtuais
 
-| VM | IP | RAM | Descrição |
-|----|----|-----|-----------|
-| vm1 | 192.168.56.10 | 1024MB | Máquina para testes |
-| vm2 | 192.168.56.11 | 512MB | Máquina com a aplicação |
+| VM  | IP            | RAM    | Descrição                                   |
+|-----|---------------|--------|---------------------------------------------|
+| vm1 | 192.168.56.10 | 1024MB | Nó de controle Ansible (deploy da aplicação) |
+| vm2 | 192.168.56.11 | 1024MB | Aplicação Node.js + monitoramento (Netdata) |
 
 ### Executando a infraestrutura
 
 ```bash
+# A partir do diretório vagrant/
+cd vagrant
+
 # Subir as VMs (primeira execução pode demorar)
 vagrant up --provider=virtualbox
 
@@ -115,21 +130,17 @@ vagrant up --provider=virtualbox
 vagrant status
 ```
 
-### Iniciando a aplicação na VM2
-
-```bash
-# Acessar a VM2
-vagrant ssh vm2
-
-# Dentro da VM2 — iniciar o servidor
-cd /vagrant_data
-node server.js &
-```
+Durante o `vagrant up`, a VM2 já é provisionada com Node.js e com o monitoramento
+(Netdata). A **aplicação** em si é implantada pelo Ansible — veja a seção
+[Ansible](#ansible) abaixo. O monitoramento é descrito em
+[`vagrant/README.md`](vagrant/README.md).
 
 ### Testando a rota GET a partir da VM1
 
+Com a aplicação implantada na VM2 (via playbook Ansible):
+
 ```bash
-# Em outro terminal — acessar a VM1
+# Acessar a VM1
 vagrant ssh vm1
 
 # Dentro da VM1 — fazer requisição para a VM2
@@ -152,6 +163,14 @@ vagrant halt
 vagrant destroy
 ```
 
+## Monitoramento
+
+A VM2 roda o [Netdata](https://www.netdata.cloud/) com um alerta de uso de CPU
+(warning acima de 80%, critical acima de 90%) que envia notificações via Telegram.
+O dashboard fica em `http://192.168.56.11:19999`. A configuração completa —
+como testar o alerta e configurar o Telegram — está em
+[`vagrant/README.md`](vagrant/README.md).
+
 ## Ansible
 
 O Ansible é executado a partir da **VM1** (nó de controle) e configura a **VM2** (nó gerenciado).
@@ -168,7 +187,8 @@ Isso permite que o Ansible na VM1 conecte via SSH na VM2 sem senha.
 ### Executando o playbook
 
 ```bash
-# 1. Subir as VMs (se ainda não estiverem rodando)
+# 1. A partir do diretório vagrant/, subir as VMs (se ainda não estiverem rodando)
+cd vagrant
 vagrant up
 
 # 2. Entrar na VM1 (nó de controle)
