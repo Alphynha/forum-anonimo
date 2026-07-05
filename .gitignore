@@ -1,5 +1,5 @@
 node_modules/
-data/
+/data/
 *.db
 *.log
 .env
@@ -7,3 +7,4 @@ data/
 coverage/
 .vagrant/
 .ssh_exchange/
+vagrant/data/secrets.yml
